@@ -1,0 +1,109 @@
+<!doctype html>
+<html class="no-js" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Remote Photo Show</title>
+    <style type="text/css">
+    body {
+        background: #000;
+        color: #FFF;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+    #canvas {
+        text-align: center;
+    }
+    #photo {
+        height: 100%;
+        width: auto;
+        display: block;
+        margin: auto;
+    }
+    </style>
+</head>
+<body>
+    <section id="canvas">
+        <img src="" id="photo">
+        <div id="result"></div>
+    </section>
+</body>
+<script type="text/javascript">
+// Set your config here!
+var baseURL = "/";
+var imgURL  = baseURL + "photos/";
+
+function newXMLHttp(){
+    var XMLHttp;
+    var XMLHttpFuncs = [
+        function() { return new XMLHttpRequest() },
+        function() { return new ActiveXObject("Msxml2.XMLHTTP") },
+        function() { return new ActiveXObject("Msxml2.XMLHTTP") },
+        function() { return new ActiveXObject("Microsoft.XMLHTTP") }
+    ];
+
+    for(var i=0; i<XMLHttpFuncs.length; i++){
+        try {
+            XMLHttp = XMLHttpFuncs[i]();
+        } catch(e) {
+            continue;
+        }
+        return XMLHttp;
+    }
+    return false;
+}
+function ajaxRequest(method, url, sucessCallback, failCallback) {
+    var req = newXMLHttp();
+    req.onreadystatechange = function() {
+        if(req.readyState != 4) {
+            return;
+        }
+        if(req.status != 200 && req.status != 304) {
+            if(failCallback != null) {
+                failCallback(req);
+            }
+            return;
+        }
+        sucessCallback(req);
+    }
+    req.open(method, url, true);
+    req.send(null);
+}
+
+var imgID   = 0;
+var imgPre  = new Image();
+var imgList;
+
+var oPhoto  = document.getElementById("photo");
+var oResult = document.getElementById("result");
+
+function setPhoto(id) {
+    oPhoto.src = imgURL + imgList[id];
+    imgPre.src = imgURL + imgList[id+1];
+}
+
+ajaxRequest("GET", baseURL + "photos.json", function(req) {
+    imgList = JSON.parse(req.responseText);
+    imgList.sort();
+    setPhoto(0);
+
+    if(typeof(EventSource) !== "undefined") {
+        var source = new EventSource(baseURL + "listen");
+        source.onmessage = function(event) {
+            if(event.data == "next") {
+                setPhoto(++imgID);
+            } else if(event.data == "prev") {
+                setPhoto(--imgID);
+            }
+        };
+    } else {
+        oResult.innerHTML = "Sorry, your browser does not support server-sent events...";
+    }
+}, function(req) {
+    oResult.innerHTML = "Failed to connect to server! (Code: " + req.status + ")";
+});
+</script>
+</html>

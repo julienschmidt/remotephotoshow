@@ -1,0 +1,71 @@
+<!doctype html>
+<html class="no-js" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Remote Master</title>
+    <style type="text/css">
+    body {
+        background: #000;
+        color: #FFF;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+    }
+    #controlbar {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        z-index: 999;
+    }
+    iframe#photoshow {
+        border: none;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        position: absolute;
+    }
+    </style>
+</head>
+<body>
+    <section id="controlbar">
+        <button onclick="prev()">Prev</button>
+        <button onclick="next()">Next</button>
+        <span id="cur"></span>
+    </section>
+    <iframe src="/" id="photoshow"></iframe>
+</body>
+<script type="text/javascript">
+var iframe = document.getElementById("photoshow").contentWindow;
+
+var id=0;
+document.getElementById("cur").innerHTML = id;
+
+function sendCMD(params) {
+    var req = iframe.newXMLHttp();
+    req.open("POST", iframe.baseURL + "master", true);
+    req.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    req.setRequestHeader("Content-length", params.length);
+    req.setRequestHeader("Connection", "close");
+    req.onreadystatechange = function() {
+        if(req.readyState == 4 && req.status == 200) {
+            document.getElementById("cur").innerHTML = id;
+        } else {
+            // ERROR!
+        }
+    }
+    req.send(params);
+}
+function prev() {
+    id--; // TODO: only on success!
+    sendCMD("cmd=prev");
+}
+function next() {
+    id++; // TODO: only on success!
+    sendCMD("cmd=next");
+}
+</script>
+</html>
