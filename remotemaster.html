@@ -56,10 +56,15 @@ function sendCMD(params) {
     req.send(params);
 }
 function prev() {
-    sendCMD("cmd=set&id="+(iframe.imgID-1));
+    var newID = iframe.imgID-1;
+    if(newID < 0) {
+        newID = iframe.imgList.length-1;
+    }
+    sendCMD("cmd=set&id="+newID);
 }
 function next() {
-    sendCMD("cmd=set&id="+(iframe.imgID+1));
+    var newID = (iframe.imgID+1)%iframe.imgList.length
+    sendCMD("cmd=set&id="+newID);
 }
 function reset() {
     sendCMD("cmd=reset");
