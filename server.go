@@ -29,6 +29,8 @@ const (
 	crtPath  string = "/etc/ssl/http.pem"
 	keyPath  string = "/etc/ssl/http.key"
 	photoDir string = "./photos/"
+
+	// Credentials for master site
 	username string = "gordon"
 	password string = "secret!"
 )
@@ -139,6 +141,7 @@ func (broker *Broker) listen() {
 	}
 }
 
+// BasicAuth is a httprouter.Handle wrapper for Basic HTTP Authentication
 func BasicAuth(h httprouter.Handle, user, pass []byte) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		const basicAuthPrefix string = "Basic "
@@ -164,15 +167,17 @@ func BasicAuth(h httprouter.Handle, user, pass []byte) httprouter.Handle {
 	}
 }
 
+// reset reloads the photos and restarts the photo show
 func reset() {
 	imgID = 0
 	photoJSON, photoErr = loadPhotos()
 	broker.Notifier <- "r"
 }
 
+// setID sets the current photo show image ID and sends notifications to all clients
 func setID(id uint) error {
 	if id > endID {
-		errors.New("Invalid ID")
+		return errors.New("Invalid ID")
 	}
 
 	imgID = id
@@ -181,6 +186,7 @@ func setID(id uint) error {
 	return nil
 }
 
+// loadPhotos gets all files in the photo dir and saves them as a list in JSON
 func loadPhotos() ([]byte, error) {
 	dir, err := os.Open(photoDir)
 	if err != nil {
@@ -237,7 +243,7 @@ func PhotoMasterCMD(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 		return
 
 	default:
-		http.Error(w, "Illegal CMD", http.StatusInternalServerError)
+		http.Error(w, "Invalid CMD", http.StatusInternalServerError)
 		return
 	}
 }
@@ -257,10 +263,6 @@ func PhotosServer(w http.ResponseWriter, r *http.Request, ps httprouter.Params) 
 	http.ServeFile(w, r, photoDir+ps.ByName("photo"))
 }
 
-func AssetsServer(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	http.ServeFile(w, r, "assets/"+ps.ByName("asset"))
-}
-
 func Favicon(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	http.ServeFile(w, r, "favicon.ico")
 }
@@ -275,7 +277,6 @@ func main() {
 	router.POST("/master", BasicAuth(PhotoMasterCMD, user, pass))
 	router.GET("/photos.json", PhotosJSON)
 	router.GET("/photos/:photo", PhotosServer)
-	router.GET("/assets/:asset", AssetsServer)
 	// router.GET("/favicon.ico", Favicon)
 
 	// SSE client broker
