@@ -8,6 +8,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -26,6 +29,8 @@ const (
 	crtPath  string = "/etc/ssl/http.pem"
 	keyPath  string = "/etc/ssl/http.key"
 	photoDir string = "./photos/"
+	username string = "gordon"
+	password string = "secret!"
 )
 
 var (
@@ -134,6 +139,31 @@ func (broker *Broker) listen() {
 	}
 }
 
+func BasicAuth(h httprouter.Handle, user, pass []byte) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		const basicAuthPrefix string = "Basic "
+
+		// Get the Basic Authentication credentials
+		auth := r.Header.Get("Authorization")
+		if strings.HasPrefix(auth, basicAuthPrefix) {
+			// Check credentials
+			payload, err := base64.StdEncoding.DecodeString(auth[len(basicAuthPrefix):])
+			if err == nil {
+				pair := bytes.SplitN(payload, []byte(":"), 2)
+				if len(pair) == 2 && bytes.Equal(pair[0], user) && bytes.Equal(pair[1], pass) {
+					// Delegate request to the given handle
+					h(w, r, ps)
+					return
+				}
+			}
+		}
+
+		// Request Basic Authentication otherwise
+		w.Header().Set("WWW-Authenticate", "Basic realm=Restricted")
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+	}
+}
+
 func reset() {
 	imgID = 0
 	photoJSON, photoErr = loadPhotos()
@@ -236,10 +266,13 @@ func Favicon(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 }
 
 func main() {
+	user := []byte(username)
+	pass := []byte(password)
+
 	router := httprouter.New()
 	router.GET("/", PhotoShow)
-	router.GET("/master", PhotoMaster)
-	router.POST("/master", PhotoMasterCMD)
+	router.GET("/master", BasicAuth(PhotoMaster, user, pass))
+	router.POST("/master", BasicAuth(PhotoMasterCMD, user, pass))
 	router.GET("/photos.json", PhotosJSON)
 	router.GET("/photos/:photo", PhotosServer)
 	router.GET("/assets/:asset", AssetsServer)
