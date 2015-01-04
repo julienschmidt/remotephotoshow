@@ -39,6 +39,13 @@
 var baseURL = "/";
 var imgURL  = baseURL + "photos/";
 
+var imgPre  = new Image(); // preloader
+var imgID;
+var imgList;
+
+var oPhoto  = document.getElementById("photo");
+var oResult = document.getElementById("result");
+
 function newXMLHttp(){
     var XMLHttp;
     var XMLHttpFuncs = [
@@ -76,37 +83,59 @@ function ajaxRequest(method, url, sucessCallback, failCallback) {
     req.send(null);
 }
 
-var imgID   = 0;
-var imgPre  = new Image();
-var imgList;
-
-var oPhoto  = document.getElementById("photo");
-var oResult = document.getElementById("result");
-
-function setPhoto(id) {
-    oPhoto.src = imgURL + imgList[id];
-    imgPre.src = imgURL + imgList[id+1];
-}
-
-ajaxRequest("GET", baseURL + "photos.json", function(req) {
-    imgList = JSON.parse(req.responseText);
-    imgList.sort();
-    setPhoto(0);
-
+function listenSSE() {
     if(typeof(EventSource) !== "undefined") {
         var source = new EventSource(baseURL + "listen");
         source.onmessage = function(event) {
-            if(event.data == "next") {
-                setPhoto(++imgID);
-            } else if(event.data == "prev") {
-                setPhoto(--imgID);
+            switch(event.data.charAt(0)) {
+            case 's': // set ID
+                setPhoto(parseInt(event.data.substring(1)));
+                break;
+            case 'r': // reset
+                loadPhotos();
+                break;
+            default:
+                console.log("unknown event (" + event.data + ")");
             }
         };
     } else {
         oResult.innerHTML = "Sorry, your browser does not support server-sent events...";
     }
-}, function(req) {
-    oResult.innerHTML = "Failed to connect to server! (Code: " + req.status + ")";
-});
+}
+
+var setPhotoCallback;
+function setPhoto(id) {
+    if(id >= 0) {
+        if(id < imgList.length) {
+            imgID = id;
+            oPhoto.src = imgURL + imgList[id];
+            imgPre.src = imgURL + imgList[(id+1)%imgList.length];
+        } else {
+            // TODO: end?
+        }
+    }
+
+    if(setPhotoCallback) {
+        setPhotoCallback(id);
+    }
+}
+
+function loadPhotos() {
+    ajaxRequest("GET", baseURL + "photos.json", function(req) {
+        var resp = JSON.parse(req.responseText);
+        imgList = resp.photos;
+        imgList.sort();
+        setPhoto(resp.id);
+        oResult.innerHTML = "";
+    }, function(req) {
+        oResult.innerHTML = "Failed to connect to server! (Code: " + req.status + ")";
+    });
+}
+
+// init
+(function init() {
+    loadPhotos();
+    listenSSE();
+})();
 </script>
 </html>
