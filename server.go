@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+
+	"github.com/julienschmidt/httprouter"
 )
 
 // Set your config here
@@ -63,7 +65,7 @@ func NewServer() (broker *Broker) {
 	return
 }
 
-func (broker *Broker) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (broker *Broker) ServeHTTP(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	// Make sure that the writer supports flushing.
 	flusher, ok := rw.(http.Flusher)
 	if !ok {
@@ -178,28 +180,25 @@ func loadPhotos() ([]byte, error) {
 	return json.Marshal(filenames)
 }
 
-func handlePhotos(rw http.ResponseWriter, req *http.Request) {
-	if photoErr != nil {
-		http.Error(rw, photoErr.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	rw.Header().Set("Content-Type", "application/json")
-	rw.Header().Set("Cache-Control", "no-cache")
-	fmt.Fprintf(rw, `{"photos": %s, "id": %d}`, photoJSON, imgID)
+func PhotoShow(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	http.ServeFile(w, r, "remotephoto.html")
 }
 
-func handleCMD(rw http.ResponseWriter, req *http.Request) {
-	switch req.PostFormValue("cmd") {
+func PhotoMaster(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	http.ServeFile(w, r, "remotemaster.html")
+}
+
+func PhotoMasterCMD(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	switch r.PostFormValue("cmd") {
 	case "set":
-		id, err := strconv.ParseUint(req.PostFormValue("id"), 10, 0)
+		id, err := strconv.ParseUint(r.PostFormValue("id"), 10, 0)
 
 		if err == nil {
 			err = setID(uint(id))
 		}
 
 		if err != nil {
-			http.Error(rw, err.Error(), http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 		return
 
@@ -208,49 +207,54 @@ func handleCMD(rw http.ResponseWriter, req *http.Request) {
 		return
 
 	default:
-		http.Error(rw, "Illegal CMD", http.StatusInternalServerError)
+		http.Error(w, "Illegal CMD", http.StatusInternalServerError)
 		return
 	}
 }
 
+func PhotosJSON(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	if photoErr != nil {
+		http.Error(w, photoErr.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache")
+	fmt.Fprintf(w, `{"photos": %s, "id": %d}`, photoJSON, imgID)
+}
+
+func PhotosServer(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	http.ServeFile(w, r, photoDir+ps.ByName("photo"))
+}
+
+func AssetsServer(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	http.ServeFile(w, r, "assets/"+ps.ByName("asset"))
+}
+
+func Favicon(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	http.ServeFile(w, r, "favicon.ico")
+}
+
 func main() {
+	router := httprouter.New()
+	router.GET("/", PhotoShow)
+	router.GET("/master", PhotoMaster)
+	router.POST("/master", PhotoMasterCMD)
+	router.GET("/photos.json", PhotosJSON)
+	router.GET("/photos/:photo", PhotosServer)
+	router.GET("/assets/:asset", AssetsServer)
+	// router.GET("/favicon.ico", Favicon)
+
 	// SSE client broker
 	broker = NewServer()
-	http.Handle("/listen", broker)
+	router.GET("/listen", broker.ServeHTTP)
 
+	// Initialize photo show
 	reset()
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "remotephoto.html")
-	})
-
-	http.HandleFunc("/master", func(w http.ResponseWriter, r *http.Request) {
-		// TODO: use Basic HTTP auth
-		switch r.Method {
-		case "GET":
-			http.ServeFile(w, r, "remotemaster.html")
-		case "POST":
-			handleCMD(w, r)
-		default:
-			http.Error(w, "Method not allowed!", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, r.URL.Path[1:])
-	})
-	/*http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-	    http.ServeFile(w, r, "favicon.ico")
-	})*/
-
-	http.HandleFunc("/photos.json", handlePhotos)
-	http.HandleFunc("/photos/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, photoDir+r.URL.Path[7:])
-	})
-
 	if https {
-		log.Fatal("HTTPS server error: ", http.ListenAndServeTLS(host, crtPath, keyPath, nil))
+		log.Fatal("HTTPS server error: ", http.ListenAndServeTLS(host, crtPath, keyPath, router))
 	} else {
-		log.Fatal("HTTP server error: ", http.ListenAndServe(host, nil))
+		log.Fatal("HTTP server error: ", http.ListenAndServe(host, router))
 	}
 }
