@@ -16,12 +16,40 @@
         color: #FFF;
         margin: 0;
         padding: 0;
+        font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+        font-weight: 300;
     }
     #controlbar {
         position: absolute;
         bottom: 0;
         right: 0;
         z-index: 999;
+        padding: 3px 3px 4px 4px;
+        background: rgba(37, 37, 37, 0.7);
+        border-top-left-radius: 5px;
+
+    }
+    #controlbar button {
+        background: #353535;
+        border: 1px rgba(45, 45, 45, 0.9) solid;
+        border-radius: 10px;
+        color: #FFF;
+        font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+        font-weight: 300;
+        text-decoration: none;
+    }
+    #controlbar button:hover, #controlbar button:focus {
+        background: #4D4D4D;
+        outline:0;
+    }
+    #controlbar button:active {
+        box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset,0 0 6px rgba(0,0,0,.2) inset;
+    }
+    #controlbar span {
+        border: 1px rgba(45, 45, 45, 0.9) solid;
+        padding: 0px 5px 1px 5px;
+        border-radius: 10px;
+        font-size: 12px;
     }
     iframe#photoshow {
         border: none;
