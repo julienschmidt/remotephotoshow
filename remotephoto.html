@@ -1,5 +1,5 @@
 <!doctype html>
-<html class="no-js" lang="en">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -15,16 +15,26 @@
         color: #FFF;
         margin: 0;
         padding: 0;
+        text-align: center;
+        white-space: nowrap;
     }
     #canvas {
-        text-align: center;
+        position: relative;
         height: 100%;
+        width: 100%;
     }
     #photo {
-        height: 100%;
+        height: auto;
         width: auto;
+        max-width: 100%;
+        max-height: 100%;
         display: block;
         margin: auto;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
     }
     </style>
 </head>
@@ -35,16 +45,13 @@
     </section>
 </body>
 <script type="text/javascript">
+"use strict";
+
 // Set your config here!
-var baseURL = "/";
-var imgURL  = baseURL + "photos/";
-
-var imgPre  = new Image(); // preloader
-var imgID;
-var imgList;
-
-var oPhoto  = document.getElementById("photo");
-var oResult = document.getElementById("result");
+var config = {
+    baseURL : "/",
+    imgURL  : "/photos/"
+};
 
 function newXMLHttp(){
     var XMLHttp;
@@ -65,6 +72,7 @@ function newXMLHttp(){
     }
     return false;
 }
+
 function ajaxRequest(method, url, sucessCallback, failCallback) {
     var req = newXMLHttp();
     req.onreadystatechange = function() {
@@ -83,57 +91,69 @@ function ajaxRequest(method, url, sucessCallback, failCallback) {
     req.send(null);
 }
 
-function listenSSE() {
-    if(typeof(EventSource) !== "undefined") {
-        var source = new EventSource(baseURL + "listen");
-        source.onmessage = function(event) {
-            switch(event.data.charAt(0)) {
-            case 's': // set ID
-                setPhoto(parseInt(event.data.substring(1)));
-                break;
-            case 'r': // reset
-                loadPhotos();
-                break;
-            default:
-                console.log("unknown event (" + event.data + ")");
-            }
-        };
-    } else {
-        oResult.innerHTML = "Sorry, your browser does not support server-sent events...";
-    }
-}
+var photoshow = new (function(cfg) {
+    this.imgID   = 0;
+    this.imgList = null;
 
-var setPhotoCallback;
-function setPhoto(id) {
-    if(id >= 0) {
-        if(id < imgList.length) {
-            imgID = id;
-            oPhoto.src = imgURL + imgList[id];
-            imgPre.src = imgURL + imgList[(id+1)%imgList.length];
+    var imgPre   = new Image(); // preloader
+    var oPhoto   = document.getElementById("photo");
+    var oResult  = document.getElementById("result");
+
+    var _ = this;
+
+    this.setPhotoCallback = false;
+    this.setPhoto = function(id) {
+        if(id >= 0) {
+            if(id < _.imgList.length) {
+                oPhoto.src = cfg.imgURL + _.imgList[id];
+                imgPre.src = cfg.imgURL + _.imgList[(id+1)%_.imgList.length];
+                _.imgID    = id;
+            }
+        }
+
+        if (typeof _.setPhotoCallback == 'function') {
+            _.setPhotoCallback(id);
+        }
+    };
+
+    this.loadPhotos = function() {
+        ajaxRequest("GET", cfg.baseURL + "photos.json", function(req) {
+            var resp = JSON.parse(req.responseText);
+            _.imgList = resp.photos;
+            _.imgList.sort();
+            _.setPhoto(resp.id);
+            oResult.innerHTML = "";
+        }, function(req) {
+            oResult.innerHTML = "Failed to connect to server! (Code: " + req.status + ")";
+        });
+    };
+
+    function listenSSE() {
+        if(typeof(EventSource) !== "undefined") {
+            var source = new EventSource(cfg.baseURL + "listen");
+            source.onmessage = function(event) {
+                switch(event.data.charAt(0)) {
+                case 's': // set ID
+                    _.setPhoto(parseInt(event.data.substring(1)));
+                    break;
+                case 'r': // reset
+                    _.loadPhotos();
+                    break;
+                default:
+                    console.log("unknown event (" + event.data + ")");
+                }
+            };
+        } else {
+            oResult.innerHTML = "Sorry, your browser does not support server-sent events...";
         }
     }
 
-    if(setPhotoCallback) {
-        setPhotoCallback(id);
-    }
-}
+    // init
+    (function() {
+        _.loadPhotos();
+        listenSSE();
+    })();
+})(config);
 
-function loadPhotos() {
-    ajaxRequest("GET", baseURL + "photos.json", function(req) {
-        var resp = JSON.parse(req.responseText);
-        imgList = resp.photos;
-        imgList.sort();
-        setPhoto(resp.id);
-        oResult.innerHTML = "";
-    }, function(req) {
-        oResult.innerHTML = "Failed to connect to server! (Code: " + req.status + ")";
-    });
-}
-
-// init
-(function init() {
-    loadPhotos();
-    listenSSE();
-})();
 </script>
 </html>

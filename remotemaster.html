@@ -1,5 +1,5 @@
 <!doctype html>
-<html class="no-js" lang="en">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -33,51 +33,105 @@
 </head>
 <body>
     <section id="controlbar">
-        <button onclick="prev()">Prev</button>
-        <button onclick="next()">Next</button>
+        <button onclick="photomaster.prev()">Prev</button>
+        <button onclick="photomaster.next()">Next</button>
         <span id="cur"></span>
-        <button onclick="reset()">Reset</button>
+        <button onclick="photomaster.reset()">Reset</button>
     </section>
     <iframe src="/" id="photoshow"></iframe>
 </body>
 <script type="text/javascript">
-var iframe = document.getElementById("photoshow").contentWindow;
+"use strict";
 
-var oCur = document.getElementById("cur");
-function updateCur() {
-    oCur.innerHTML = "" + (iframe.imgID+1) + " / " + iframe.imgList.length;
-}
-iframe.setPhotoCallback = updateCur;
-
-function sendCMD(params) {
-    var req = iframe.newXMLHttp();
-    req.open("POST", iframe.baseURL + "master", true);
-    req.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-    req.send(params);
-}
-function prev() {
-    var newID = iframe.imgID-1;
-    if(newID < 0) {
-        newID = iframe.imgList.length-1;
+function bindReady(win, fn) {
+    // call fn only once
+    var done = false;
+    function ready() {
+        if (!done && (done = true)) {
+            fn();
+        }
     }
-    sendCMD("cmd=set&id="+newID);
-}
-function next() {
-    var newID = (iframe.imgID+1)%iframe.imgList.length
-    sendCMD("cmd=set&id="+newID);
-}
-function reset() {
-    sendCMD("cmd=reset");
-}
 
-document.onkeydown = function(e) {
-    var keycode = e.keyCode;
-    var key = String.fromCharCode(keycode).toLowerCase();
-    if ((key == 'p') || (keycode == 37)) { // display previous image
-        prev();
-    } else if ((key == 'n') || (keycode == 39)) { // display next image
-        next();
+    var doc = win.document;
+
+    // try to add event listeners for proper 'ready' events
+    if(doc.addEventListener) {
+        doc.addEventListener("DOMContentLoaded", ready, false);
+    } else if(document.attachEvent) {
+        document.attachEvent("onreadystatechange", function(){
+            if(document.readyState === "complete") {
+                ready();
+            }
+        });
+    }
+
+    // also add a listener for 'onload' as a fallback
+    if(win.addEventListener) {
+        win.addEventListener('load', ready, false);
+    } else if(window.attachEvent) {
+        window.attachEvent('onload', ready);
+    } else {
+        // copy existing onload function for very old browsers before replacing it
+        var onload = window.onload;
+        window.onload = function() {
+            onload && onload();
+            ready();
+        }
     }
 }
+
+
+var photomaster = new (function(iframe) {
+    var _ = this;
+    var cfg, photoshow;
+
+    function sendCMD(params) {
+        var req = iframe.newXMLHttp();
+        req.open("POST", cfg.baseURL + "master", true);
+        req.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+        req.send(params);
+    }
+
+    this.prev = function() {
+        var newID = photoshow.imgID-1;
+        if(newID < 0) {
+            newID = photoshow.imgList.length-1;
+        }
+        sendCMD("cmd=set&id="+newID);
+    };
+
+    this.next = function() {
+        var newID = (photoshow.imgID+1)%photoshow.imgList.length
+        sendCMD("cmd=set&id="+newID);
+    };
+
+    this.reset = function() {
+        sendCMD("cmd=reset");
+    };
+
+    var oCur = document.getElementById("cur");
+    this.updateCur = function() {
+        oCur.innerHTML = "" + (photoshow.imgID+1) + " / " + photoshow.imgList.length;
+    }
+
+    function init() {
+        cfg       = iframe.config;
+        photoshow = iframe.photoshow;
+
+        document.onkeydown = function(e) {
+            var keycode = e.keyCode;
+            var key = String.fromCharCode(keycode).toLowerCase();
+            if ((key == 'p') || (keycode == 37)) { // display previous image
+                _.prev();
+            } else if ((key == 'n') || (keycode == 39)) { // display next image
+                _.next();
+            }
+        };
+
+        photoshow.setPhotoCallback = _.updateCur;
+    }
+
+    bindReady(iframe, init);
+})(document.getElementById("photoshow").contentWindow);
 </script>
 </html>
