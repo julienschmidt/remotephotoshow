@@ -69,5 +69,15 @@ function next() {
 function reset() {
     sendCMD("cmd=reset");
 }
+
+document.onkeydown = function(e) {
+    var keycode = e.keyCode;
+    var key = String.fromCharCode(keycode).toLowerCase();
+    if ((key == 'p') || (keycode == 37)) { // display previous image
+        prev();
+    } else if ((key == 'n') || (keycode == 39)) { // display next image
+        next();
+    }
+}
 </script>
 </html>
