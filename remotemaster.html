@@ -146,7 +146,7 @@ var photomaster = new (function(iframe) {
         cfg       = iframe.config;
         photoshow = iframe.photoshow;
 
-        document.onkeydown = function(e) {
+        document.onkeydown = iframe.document.onkeydown = function(e) {
             var keycode = e.keyCode;
             var key = String.fromCharCode(keycode).toLowerCase();
             if ((key == 'p') || (keycode == 37)) { // display previous image
@@ -156,6 +156,9 @@ var photomaster = new (function(iframe) {
             }
         };
 
+        if(photoshow.imgList != null) {
+            _.updateCur();
+        }
         photoshow.setPhotoCallback = _.updateCur;
     }
 
