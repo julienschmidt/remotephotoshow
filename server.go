@@ -24,11 +24,13 @@ import (
 
 // Set your config here
 const (
-	https    bool   = false
 	host     string = ":8080"
+	photoDir string = "./photos/"
+
+	// HTTPS config
+	https    bool   = false	
 	crtPath  string = "/etc/ssl/http.pem"
 	keyPath  string = "/etc/ssl/http.key"
-	photoDir string = "./photos/"
 
 	// Credentials for master site
 	username string = "gordon"
