@@ -1,0 +1,14 @@
+# remotephotoshow
+A small server application to present photos remotely over the web
+
+The complete family is gathered for christmas. The complete family?
+No, Julien is more than 10000 km away.
+This is a small hack I made the show my family some photos remotely over the web using [Server-Sent Events](http://www.w3.org/TR/eventsource/) in Go.
+
+## Usage
+Modify the the [config](https://github.com/julienschmidt/remotephotoshow/blob/master/server.go#L25), put your photos in the configured directory and you are ready to run the app with `go run server.go`!
+
+
+
+
+A small hack by [@julienschmidt](https://twitter.com/JulienSchmidt)
