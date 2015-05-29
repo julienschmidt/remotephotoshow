@@ -39,8 +39,8 @@ const (
 
 var (
 	streamer  *sse.Streamer
-	imgID     uint
-	endID     uint
+	imgID     uint64
+	endID     uint64
 	photoJSON []byte
 	photoErr  error
 )
@@ -75,17 +75,17 @@ func BasicAuth(h httprouter.Handle, user, pass []byte) httprouter.Handle {
 func reset() {
 	imgID = 0
 	photoJSON, photoErr = loadPhotos()
-	streamer.SendString("", "", "r")
+	streamer.SendString("", "reset", "")
 }
 
 // setID sets the current photo show image ID and sends notifications to all clients
-func setID(id uint) error {
+func setID(id uint64) error {
 	if id > endID {
 		return errors.New("invalid ID")
 	}
 
 	imgID = id
-	streamer.SendString("", "", fmt.Sprintf("s%d", id))
+	streamer.SendUint("", "set", id)
 
 	return nil
 }
@@ -117,7 +117,7 @@ func loadPhotos() ([]byte, error) {
 		}
 	}
 
-	endID = uint(len(filenames)) - 1
+	endID = uint64(len(filenames)) - 1
 	return json.Marshal(filenames)
 }
 
@@ -135,7 +135,7 @@ func PhotoMasterCMD(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 		id, err := strconv.ParseUint(r.PostFormValue("id"), 10, 0)
 
 		if err == nil {
-			err = setID(uint(id))
+			err = setID(uint64(id))
 		}
 
 		if err != nil {

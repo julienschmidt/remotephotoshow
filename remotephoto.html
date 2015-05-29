@@ -129,20 +129,14 @@ var photoshow = new (function(cfg) {
     };
 
     function listenSSE() {
-        if(typeof(EventSource) !== "undefined") {
-            var source = new EventSource(cfg.baseURL + "listen");
-            source.onmessage = function(event) {
-                switch(event.data.charAt(0)) {
-                case 's': // set ID
-                    _.setPhoto(parseInt(event.data.substring(1)));
-                    break;
-                case 'r': // reset
-                    _.loadPhotos();
-                    break;
-                default:
-                    console.log("unknown event (" + event.data + ")");
-                }
-            };
+        if(!!window.EventSource) {
+           var source = new EventSource(cfg.baseURL + 'listen');
+            source.addEventListener('reset', function(e) {
+                _.loadPhotos();
+            }, false);
+            source.addEventListener('set', function(e) {
+                _.setPhoto(parseInt(e.data));
+            }, false);
         } else {
             oResult.innerHTML = "Sorry, your browser does not support server-sent events...";
         }
