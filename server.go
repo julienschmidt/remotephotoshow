@@ -1,7 +1,6 @@
 // Copyright 2014 Julien Schmidt. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
-// SSE code based on https://gist.github.com/ismasan/3fb75381cd2deb6bfa9c
 
 // Package main provides the server application handling the server-sent-events
 // for the remote photo show.
@@ -20,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/julienschmidt/sse"
 )
 
 // Set your config here
@@ -28,9 +28,9 @@ const (
 	photoDir string = "./photos/"
 
 	// HTTPS config
-	https    bool   = false	
-	crtPath  string = "/etc/ssl/http.pem"
-	keyPath  string = "/etc/ssl/http.key"
+	https   bool   = false
+	crtPath string = "/etc/ssl/http.pem"
+	keyPath string = "/etc/ssl/http.key"
 
 	// Credentials for master site
 	username string = "gordon"
@@ -38,110 +38,12 @@ const (
 )
 
 var (
-	broker    *Broker
+	streamer  *sse.Streamer
 	imgID     uint
 	endID     uint
 	photoJSON []byte
 	photoErr  error
 )
-
-type Broker struct {
-	// Events are pushed to this channel by the main events-gathering routine
-	Notifier chan string
-
-	// New client connections
-	newClients chan chan string
-
-	// Closed client connections
-	closingClients chan chan string
-
-	// Client connections registry
-	clients map[chan string]bool
-}
-
-func NewServer() (broker *Broker) {
-	// Instantiate a broker
-	broker = &Broker{
-		Notifier:       make(chan string, 1),
-		newClients:     make(chan chan string),
-		closingClients: make(chan chan string),
-		clients:        make(map[chan string]bool),
-	}
-
-	// Set it running - listening and broadcasting events
-	go broker.listen()
-
-	return
-}
-
-func (broker *Broker) ServeHTTP(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	// Make sure that the writer supports flushing.
-	flusher, ok := rw.(http.Flusher)
-	if !ok {
-		http.Error(rw, "Streaming unsupported!", http.StatusInternalServerError)
-		return
-	}
-
-	rw.Header().Set("Content-Type", "text/event-stream")
-	rw.Header().Set("Cache-Control", "no-cache")
-	rw.Header().Set("Connection", "keep-alive")
-	rw.Header().Set("Access-Control-Allow-Origin", "*")
-
-	// Each connection registers its own message channel with the Broker's
-	// connections registry
-	messageChan := make(chan string)
-
-	// Signal the broker that we have a new connection
-	broker.newClients <- messageChan
-
-	// Remove this client from the map of connected clients when this handler
-	// exits.
-	defer func() {
-		broker.closingClients <- messageChan
-	}()
-
-	// Listen to connection close and deregister messageChan
-	notify := rw.(http.CloseNotifier).CloseNotify()
-
-	go func() {
-		<-notify
-		broker.closingClients <- messageChan
-	}()
-
-	for {
-		// Write to the ResponseWriter
-		// Server Sent Events compatible
-		fmt.Fprintf(rw, "data: %s\n\n", <-messageChan)
-
-		// Flush the data immediately instead of buffering it for later.
-		flusher.Flush()
-	}
-}
-
-func (broker *Broker) listen() {
-	for {
-		select {
-		case s := <-broker.newClients:
-			// A new client has connected. Register their message channel
-			broker.clients[s] = true
-			log.Printf("Client added. %d registered clients", len(broker.clients))
-
-		case s := <-broker.closingClients:
-			// A client has disconnected and we want to stop sending messages
-			// to this client.
-			delete(broker.clients, s)
-			log.Printf("Removed client. %d registered clients", len(broker.clients))
-
-		case event := <-broker.Notifier:
-			// We got a new event from the outside!
-			// Send event to all connected clients
-			fmt.Println("Send event:", event)
-			for clientMessageChan, _ := range broker.clients {
-				clientMessageChan <- event
-			}
-		}
-	}
-}
 
 // BasicAuth is a httprouter.Handle wrapper for Basic HTTP Authentication
 func BasicAuth(h httprouter.Handle, user, pass []byte) httprouter.Handle {
@@ -173,17 +75,17 @@ func BasicAuth(h httprouter.Handle, user, pass []byte) httprouter.Handle {
 func reset() {
 	imgID = 0
 	photoJSON, photoErr = loadPhotos()
-	broker.Notifier <- "r"
+	streamer.SendString("", "", "r")
 }
 
 // setID sets the current photo show image ID and sends notifications to all clients
 func setID(id uint) error {
 	if id > endID {
-		return errors.New("Invalid ID")
+		return errors.New("invalid ID")
 	}
 
 	imgID = id
-	broker.Notifier <- fmt.Sprintf("s%d", id)
+	streamer.SendString("", "", fmt.Sprintf("s%d", id))
 
 	return nil
 }
@@ -215,6 +117,7 @@ func loadPhotos() ([]byte, error) {
 		}
 	}
 
+	endID = uint(len(filenames)) - 1
 	return json.Marshal(filenames)
 }
 
@@ -281,9 +184,9 @@ func main() {
 	router.GET("/photos/:photo", PhotosServer)
 	// router.GET("/favicon.ico", Favicon)
 
-	// SSE client broker
-	broker = NewServer()
-	router.GET("/listen", broker.ServeHTTP)
+	// Server-Sent Events
+	streamer = sse.New()
+	router.Handler("GET", "/listen", streamer)
 
 	// Initialize photo show
 	reset()
